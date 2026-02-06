@@ -1,0 +1,46 @@
+blueprint:
+  name: iowarp_agent
+  version: 0.1.0
+  description: 'Rule-based agent backed by IOWarp context engine with memcached cache-aside
+    and extended URI resolution.
+
+    '
+iowarp:
+  bridge_endpoint: tcp://127.0.0.1:5560
+  connect_timeout_ms: 5000
+  request_timeout_ms: 30000
+cache:
+  hosts:
+  - host: 127.0.0.1
+    port: 11211
+  key_prefix: iowarp
+  default_ttl: 3600
+  max_value_size: 10485760
+uri_resolver:
+  temp_dir: /tmp/agent-factory/uri-cache
+  supported_schemes:
+  - 'file::'
+  - 'hdf5::'
+  - 'folder::'
+  - 'mem::'
+environment:
+  type: iowarp
+  default_format: arrow
+  reward:
+    cache_hit: 0.3
+    cache_miss: 0.2
+    assimilate_success: 0.1
+    query_success: 0.1
+    prune_success: 0.05
+    error: -0.5
+agent:
+  type: rule_based
+  rules:
+  - condition: task_contains_ingest
+    action: assimilate
+  - condition: task_contains_find
+    action: query
+  - condition: task_contains_get
+    action: retrieve
+  - condition: task_contains_delete
+    action: prune

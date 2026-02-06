@@ -1,0 +1,47 @@
+blueprint:
+  name: ingestor_agent
+  version: 0.1.0
+  description: |
+    Specialized agent for data ingestion. Wraps a Claude backend and
+    constrains all actions to 'assimilate' only.
+    
+    Use this agent when you need to ingest/load/import data into IOWarp.
+
+iowarp:
+  bridge_endpoint: tcp://127.0.0.1:5560
+  connect_timeout_ms: 5000
+  request_timeout_ms: 30000
+
+cache:
+  hosts:
+    - host: 127.0.0.1
+      port: 11211
+  key_prefix: iowarp
+  default_ttl: 3600
+  max_value_size: 10485760
+
+uri_resolver:
+  temp_dir: /tmp/agent-factory/uri-cache
+  supported_schemes:
+    - 'file::'
+    - 'hdf5::'
+    - 'folder::'
+    - 'mem::'
+
+environment:
+  type: iowarp
+  default_format: arrow
+  reward:
+    cache_hit: 0.3
+    cache_miss: 0.2
+    assimilate_success: 0.1
+    query_success: 0.1
+    prune_success: 0.05
+    error: -0.5
+
+agent:
+  type: ingestor
+  backend: claude
+  model: sonnet
+  default_tag: default
+  default_format: arrow

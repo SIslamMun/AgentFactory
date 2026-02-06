@@ -1,0 +1,35 @@
+pipeline_id: ingest_retrieve
+description: "Ingest documents then query and retrieve them"
+
+agents:
+  ingestor:
+    type: ingestor
+    backend: claude
+    model: sonnet
+    default_tag: docs
+    default_format: arrow
+  retriever:
+    type: retriever
+    backend: claude
+    model: sonnet
+
+steps:
+  - name: ingest_docs
+    agent: ingestor
+    inputs:
+      src: "${pipeline.src}"
+      dst: "${pipeline.dst}"
+    outputs: [tag, files]
+
+  - name: query_results
+    agent: retriever
+    inputs:
+      tag_pattern: "${ingest_docs.tag}"
+    outputs: [matches]
+    depends_on: [ingest_docs]
+
+  - name: retrieve_data
+    agent: retriever
+    inputs:
+      tag: "${ingest_docs.tag}"
+    depends_on: [query_results]

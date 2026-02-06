@@ -1,0 +1,20 @@
+# IOWarp runtime configuration
+runtime:
+  shared_memory:
+    size: 4G
+    backend: posix
+  devices:
+    - type: ram
+      capacity: 2G
+    - type: nvme
+      path: /var/lib/iowarp/nvme
+      capacity: 50G
+
+context_engine:
+  default_format: arrow
+  max_blob_size: 1G
+  compression: lz4
+
+logging:
+  level: info
+  output: /var/log/iowarp/runtime.log

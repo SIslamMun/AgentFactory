@@ -1,0 +1,55 @@
+# IOWarp Distributed Agent Blueprint
+# Defines a multi-node IOWarp setup with 2 bridges and 2 cache nodes.
+#
+# Usage:
+#   1. Start infrastructure:
+#      docker-compose -f docker-compose.distributed.yml up -d
+#   2. Run CLI:
+#      python3 cli.py
+#      (it will auto-load this blueprint alongside iowarp_agent.yaml)
+
+blueprint:
+  name: iowarp_distributed
+  version: "0.1.0"
+  description: >
+    Distributed agent with 2 IOWarp bridge nodes (round-robin)
+    and 2 Memcached cache nodes (consistent-hash sharding).
+
+iowarp:
+  bridge_endpoints:
+    - "tcp://127.0.0.1:5560"
+    - "tcp://127.0.0.1:5561"
+  connect_timeout_ms: 5000
+  request_timeout_ms: 30000
+
+cache:
+  hosts:
+    - host: "127.0.0.1"
+      port: 11211
+    - host: "127.0.0.1"
+      port: 11212
+  key_prefix: "iowarp"
+  default_ttl: 3600
+  max_value_size: 10485760
+
+uri_resolver:
+  temp_dir: "/tmp/agent-factory/uri-cache"
+  supported_schemes:
+    - "file::"
+    - "hdf5::"
+    - "folder::"
+    - "mem::"
+
+environment:
+  type: iowarp
+  default_format: arrow
+  reward:
+    cache_hit: 0.3
+    cache_miss: 0.2
+    assimilate_success: 0.1
+    query_success: 0.1
+    prune_success: 0.05
+    error: -0.5
+
+agent:
+  type: rule_based
