@@ -16,11 +16,12 @@ from agent_factory.core.types import Action, Observation, StepResult
 
 log = logging.getLogger(__name__)
 
-_ALLOWED_ACTIONS = frozenset({"query", "retrieve", "list_blobs"})
+_ALLOWED_ACTIONS = frozenset({"query", "retrieve", "list_blobs", "destroy", "prune"})
 
 _RETRIEVER_PREFIX = (
     "You are a data-access specialist for the IOWarp context engine. "
-    "You may look up, access, or enumerate blobs. "
+    "You may look up, access, enumerate, or delete blobs.\n"
+    "Available actions: query, retrieve, list_blobs, destroy (permanent delete), prune (cache evict).\n"
     "Extract tag patterns, blob names, and parameters from the instruction.\n\n"
 )
 

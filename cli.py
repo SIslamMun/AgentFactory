@@ -1058,8 +1058,19 @@ def main() -> None:
             err(f"Failed to load blueprint: {exc}")
             sys.exit(1)
 
-        # Select agent type
-        agent_cfg = select_agent_type()
+        # Check if blueprint has a specialized agent type that shouldn't be overridden
+        existing_agent_type = blueprint.get("agent", {}).get("type")
+        specialized_types = {"coordinator", "ingestor", "retriever"}
+        
+        if existing_agent_type in specialized_types:
+            # Use blueprint's agent config as-is for specialized agents
+            agent_cfg = blueprint.get("agent", {})
+            print(f"  Using {CYAN}{existing_agent_type}{RESET} agent from blueprint")
+            print()
+        else:
+            # Select agent type for generic blueprints
+            agent_cfg = select_agent_type()
+        
         run_interactive(blueprint, agent_cfg, registry)
 
 
