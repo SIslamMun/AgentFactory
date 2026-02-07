@@ -41,6 +41,6 @@ environment:
 
 agent:
   type: retriever
-  backend: claude
+  backend: claude  # Claude will now understand skip_cache
   model: sonnet
   default_tag_pattern: "*"

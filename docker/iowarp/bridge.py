@@ -56,15 +56,19 @@ def handle_context_bundle(params: dict) -> dict:
         dst: str              — destination tag
         format: str           — data format hint (arrow, csv, json, ...)
     """
-    if not HAS_WRP:
-        return {"result": {"status": "ok", "stub": True, "tag": params.get("dst", "")}}
-
     src = params["src"]
     dst = params["dst"]
     fmt = params.get("format", "arrow")
 
-    wrp_cee.context_bundle(src=src, dst=dst, format=fmt)
-    return {"result": {"status": "ok", "tag": dst}}
+    # Call stub or real wrp_cee function
+    result = wrp_cee.context_bundle(src=src, dst=dst, format=fmt)
+    
+    # If stub returns a dict with details, use it; otherwise create simple response
+    if isinstance(result, dict):
+        return {"result": result}
+    else:
+        stub_marker = {"stub": True} if not HAS_WRP else {}
+        return {"result": {"status": "ok", "tag": dst, **stub_marker}}
 
 
 def handle_context_query(params: dict) -> dict:
@@ -74,12 +78,10 @@ def handle_context_query(params: dict) -> dict:
         tag_pattern: str   — glob pattern for tags
         blob_pattern: str  — glob pattern for blob names (optional)
     """
-    if not HAS_WRP:
-        return {"result": {"matches": [], "stub": True}}
-
     tag_pattern = params.get("tag_pattern", "*")
     blob_pattern = params.get("blob_pattern", "*")
 
+    # Call stub or real wrp_cee function
     matches = wrp_cee.context_query(
         tag_pattern=tag_pattern,
         blob_pattern=blob_pattern,
@@ -91,7 +93,9 @@ def handle_context_query(params: dict) -> dict:
             normalised.append(m)
         else:
             normalised.append({"tag": str(m)})
-    return {"result": {"matches": normalised}}
+    
+    stub_marker = {"stub": True} if not HAS_WRP else {}
+    return {"result": {"matches": normalised, **stub_marker}}
 
 
 def handle_context_retrieve(params: dict) -> dict:
@@ -101,18 +105,19 @@ def handle_context_retrieve(params: dict) -> dict:
         tag: str        — context tag
         blob_name: str  — blob identifier within the tag
     """
-    if not HAS_WRP:
-        return {"result": {"data": None, "stub": True}}
-
     tag = params["tag"]
     blob_name = params["blob_name"]
 
+    # Call stub or real wrp_cee function
     data = wrp_cee.context_retrieve(tag=tag, blob_name=blob_name)
 
     # Encode bytes as hex for JSON transport; caller decodes
     if isinstance(data, (bytes, bytearray)):
-        return {"result": {"data": data.hex(), "encoding": "hex"}}
-    return {"result": {"data": data}}
+        stub_marker = {"stub": True} if not HAS_WRP else {}
+        return {"result": {"data": data.hex(), "encoding": "hex", **stub_marker}}
+    
+    stub_marker = {"stub": True} if not HAS_WRP else {}
+    return {"result": {"data": data, **stub_marker}}
 
 
 def handle_context_destroy(params: dict) -> dict:
@@ -121,16 +126,22 @@ def handle_context_destroy(params: dict) -> dict:
     Expected params:
         tags: str | list[str]  — tag(s) to destroy
     """
-    if not HAS_WRP:
-        return {"result": {"status": "ok", "stub": True}}
-
     tags = params["tags"]
     if isinstance(tags, str):
         tags = [tags]
 
     # Call wrp_cee with tags (not tag) - wrp_cee handles the loop internally
     result = wrp_cee.context_destroy(tags)
+    
+    # Add stub marker if needed
+    if not HAS_WRP and isinstance(result, dict):
+        result["stub"] = True
     return {"result": result}
+
+
+def handle_stub_state(params: dict) -> dict:
+    """Debug handler to inspect storage state (stub or real backend)."""
+    return {"result": wrp_cee.get_stub_state()}
 
 
 DISPATCH = {
@@ -139,6 +150,7 @@ DISPATCH = {
     "context_query": handle_context_query,
     "context_retrieve": handle_context_retrieve,
     "context_destroy": handle_context_destroy,
+    "stub_state": handle_stub_state,
 }
 
 
@@ -163,6 +175,8 @@ def main() -> None:
         method = raw.get("method", "")
         params = raw.get("params", {})
         req_id = raw.get("id")
+        
+        log.info(f"Received: method={method}, params={params}")
 
         handler = DISPATCH.get(method)
         if handler is None:
@@ -170,6 +184,7 @@ def main() -> None:
         else:
             try:
                 resp = handler(params)
+                log.info(f"Handler {method} result: {list(resp.keys()) if isinstance(resp, dict) else type(resp)}")
             except Exception as exc:
                 log.error("Handler %s failed:\n%s", method, traceback.format_exc())
                 resp = {"error": str(exc)}

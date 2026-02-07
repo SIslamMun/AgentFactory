@@ -94,6 +94,11 @@ class IOWarpAgent:
         elif action_name == "retrieve":
             params.setdefault("tag", self._extract_tag(text))
             params.setdefault("blob_name", self._extract_blob(text))
+            # Check for skip_cache keywords
+            skip = self._should_skip_cache(text)
+            log.debug(f"_should_skip_cache('{text}') = {skip}")
+            if skip:
+                params["skip_cache"] = True
 
         elif action_name == "prune":
             # Prune = cache eviction (requires blob_names)
@@ -152,24 +157,36 @@ class IOWarpAgent:
     @staticmethod
     def _extract_tag(text: str) -> str:
         """Extract tag name from text.
-        
-        Patterns: "tag:X", "from X", "into X", "as X"
+
+        Patterns: "tag:X", "from X", "into X", "as X",
+                  "destroy/delete/remove X"
         """
         # Try explicit tag: syntax first
         match = re.search(r"tag[:\s=]+['\"]?(\w+)", text)
         if match:
             return match.group(1).strip("'\"")
-        
+
         # Try "from X" pattern
         match = re.search(r"\bfrom\s+['\"]?(\w+)", text)
         if match:
             return match.group(1).strip("'\"")
-        
+
         # Try "into X" or "as X" pattern
         match = re.search(r"(?:into|as)\s+['\"]?(\w+)", text)
         if match:
             return match.group(1).strip("'\"")
-        
+
+        # Try "destroy/delete/remove X" — tag is the word after the action verb
+        _SKIP_WORDS = {"the", "all", "a", "an", "this", "that", "it", "from", "in"}
+        match = re.search(
+            r"\b(?:destroy|delete|remove|query|find|search|list)\s+['\"]?(\w+)",
+            text, re.IGNORECASE,
+        )
+        if match:
+            word = match.group(1).strip("'\"")
+            if word.lower() not in _SKIP_WORDS:
+                return word
+
         return "default"
 
     @staticmethod
@@ -196,3 +213,20 @@ class IOWarpAgent:
         if match:
             return match.group(1).strip("'\"")
         return None
+
+    @staticmethod
+    def _should_skip_cache(text: str) -> bool:
+        """Check if text indicates bypassing cache.
+        
+        Keywords: "force", "bypass cache", "skip cache", "from iowarp", "direct"
+        """
+        text_lower = text.lower()
+        skip_keywords = [
+            r"\bforce\b",
+            r"\bbypass\s+cache\b",
+            r"\bskip\s+cache\b",
+            r"\bfrom\s+iowarp\b",
+            r"\bdirect(?:ly)?\b",
+            r"\bno\s+cache\b",
+        ]
+        return any(re.search(pattern, text_lower) for pattern in skip_keywords)

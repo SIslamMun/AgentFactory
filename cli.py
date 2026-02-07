@@ -354,9 +354,32 @@ def show_retrieve_preview(built, action, result) -> None:
         return
 
     try:
-        cached_bytes = built.cache.get(tag, blob_name)
-        if cached_bytes:
-            snippet = cached_bytes.decode("utf-8", errors="replace")[:400]
+        # First try to get content from observation data (includes IOWarp fetches)
+        content_bytes = None
+        if result.observation.data and "content" in result.observation.data:
+            content = result.observation.data["content"]
+            if isinstance(content, (bytes, bytearray)):
+                content_bytes = content
+            elif isinstance(content, str):
+                # Handle case where content is string representation of bytes
+                # e.g., "b'\\xe2\\x94\\x80'" should become actual bytes
+                if content.startswith("b'") or content.startswith('b"'):
+                    try:
+                        # Use ast.literal_eval to safely convert string repr to bytes
+                        import ast
+                        content_bytes = ast.literal_eval(content)
+                    except:
+                        # If that fails, just encode the string as UTF-8
+                        content_bytes = content.encode("utf-8")
+                else:
+                    content_bytes = content.encode("utf-8")
+        
+        # Fallback to cache if not in observation
+        if not content_bytes:
+            content_bytes = built.cache.get(tag, blob_name)
+        
+        if content_bytes:
+            snippet = content_bytes.decode("utf-8", errors="replace")[:400]
             lines = snippet.splitlines()[:8]
             print()
             print(f"    {DIM}── Content preview ──{RESET}")
@@ -364,7 +387,10 @@ def show_retrieve_preview(built, action, result) -> None:
                 print(f"    {DIM}│ {line}{RESET}")
             if len(snippet) >= 400 or len(snippet.splitlines()) > 8:
                 print(f"    {DIM}│ ...{RESET}")
-    except Exception:
+    except Exception as e:
+        # Log the error for debugging
+        import logging
+        logging.getLogger(__name__).debug(f"Preview error: {e}")
         pass
 
 

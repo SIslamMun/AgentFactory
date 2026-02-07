@@ -5,10 +5,12 @@ services:
     ipc: shareable
     shm_size: "8g"
     volumes:
+      - .:/workspace  # Mount workspace for file access in stub mode
       - ./data:/data
       - iowarp-storage:/var/lib/iowarp
     environment:
       - BRIDGE_PORT=5560
+    working_dir: /workspace  # Set working directory to workspace
     healthcheck:
       test: ["CMD", "python3", "-c", "import zmq; c=zmq.Context(); s=c.socket(zmq.REQ); s.connect('tcp://127.0.0.1:5560'); s.send_json({'method':'ping'}); r=s.recv_json(); s.close(); c.term(); assert r.get('result')=='pong'"]
       interval: 10s

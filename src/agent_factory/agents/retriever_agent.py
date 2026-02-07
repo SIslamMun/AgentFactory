@@ -23,6 +23,10 @@ _RETRIEVER_PREFIX = (
     "You may look up, access, enumerate, or delete blobs.\n"
     "Available actions: query, retrieve, list_blobs, destroy (permanent delete), prune (cache evict).\n"
     "Extract tag patterns, blob names, and parameters from the instruction.\n\n"
+    "For retrieve actions:\n"
+    "- If user says 'force', 'bypass cache', 'skip cache', 'from iowarp', or 'directly', "
+    "add skip_cache=true to bypass cache and fetch directly from IOWarp.\n"
+    "- Otherwise, use default cache-first behavior.\n\n"
 )
 
 

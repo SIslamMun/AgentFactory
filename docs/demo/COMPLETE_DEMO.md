@@ -16,6 +16,8 @@ cd /home/shazzadul/Illinois_Tech/Spring26/RA/AgentFactory
 docker-compose up -d
 ```
 
+sample folder:/home/shazzadul/Illinois_Tech/Spring26/RA/AgentFactory/old_docs
+
 Verify services are running:
 
 ```bash

@@ -38,6 +38,8 @@ ACTIONS YOU CAN TAKE:
                 params: tag_pattern (glob like "*" or "docs*")
   retrieve    — Get a specific piece of data back
                 params: tag (tag name), blob_name (file name)
+                OPTIONAL: skip_cache (true/false) - if true, bypass cache and fetch from IOWarp directly
+                Use skip_cache=true when user says: "force", "bypass cache", "skip cache", "from iowarp", "directly", or "no cache"
   destroy     — Permanently delete entire tag(s) from storage and cache
                 params: tags (tag name or list of tag names)
   prune       — Evict specific blobs from cache only (data stays in IOWarp)

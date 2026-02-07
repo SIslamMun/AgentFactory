@@ -149,55 +149,70 @@ class IOWarpEnvironment:
         tag_pattern = params.get("tag_pattern", "*")
         blob_pattern = params.get("blob_pattern", "*")
 
-        # Query memcached directly since IOWarp query returns 0 in stub mode
+        # Query IOWarp (source of truth), fall back to cache if IOWarp fails or returns empty
+        matches = []
+        source = "none"
+        
         try:
-            matches = self._cache.query_keys(tag_pattern)
-            count = len(matches)
-            obs = Observation(
-                text=f"Query returned {count} match(es) from cache.",
-                data={"matches": matches},
-            )
-            self._last_obs = obs
-            return StepResult(
-                observation=obs,
-                reward=self._rewards.query_success,
-            )
-        except Exception as exc:
-            log.warning(f"Cache query failed, falling back to IOWarp: {exc}")
-            # Fallback to IOWarp
             result = self._client.context_query(
                 tag_pattern=tag_pattern,
                 blob_pattern=blob_pattern,
             )
-            obs = Observation(
-                text=f"Query returned {len(result.matches)} match(es).",
-                data={"matches": result.matches},
-            )
-            self._last_obs = obs
-            return StepResult(
-                observation=obs,
-                reward=self._rewards.query_success,
-            )
+            matches = result.matches
+            source = "IOWarp"
+            
+            # If IOWarp returns 0 results, try cache as fallback
+            if not matches:
+                log.info("IOWarp query returned 0 results, checking cache...")
+                try:
+                    cache_matches = self._cache.query_keys(tag_pattern)
+                    if cache_matches:
+                        matches = cache_matches
+                        source = "cache (IOWarp empty)"
+                except Exception as cache_exc:
+                    log.debug(f"Cache query failed: {cache_exc}")
+                    
+        except Exception as exc:
+            log.warning(f"IOWarp query failed, falling back to cache: {exc}")
+            try:
+                matches = self._cache.query_keys(tag_pattern)
+                source = "cache (IOWarp error)"
+            except Exception as cache_exc:
+                log.warning(f"Cache query also failed: {cache_exc}")
+                matches = []
+                source = "none"
+
+        obs = Observation(
+            text=f"Query returned {len(matches)} match(es) from {source}.",
+            data={"matches": matches},
+        )
+        self._last_obs = obs
+        return StepResult(
+            observation=obs,
+            reward=self._rewards.query_success,
+        )
 
     def _do_retrieve(self, params: dict[str, Any]) -> StepResult:
         tag = params["tag"]
         blob_name = params["blob_name"]
+        skip_cache = params.get("skip_cache", False)
 
-        # Cache-aside: check cache first
-        cached = self._cache.get(tag, blob_name)
-        if cached is not None:
-            obs = Observation(
-                text=f"Retrieved '{blob_name}' from cache (hit).",
-                data={"tag": tag, "blob_name": blob_name, "cache_hit": True,
-                      "size": len(cached)},
-            )
-            self._last_obs = obs
-            return StepResult(
-                observation=obs,
-                reward=self._rewards.cache_hit,
-            )
+        # Cache-aside: check cache first (unless skip_cache=True)
+        if not skip_cache:
+            cached = self._cache.get(tag, blob_name)
+            if cached is not None:
+                obs = Observation(
+                    text=f"Retrieved '{blob_name}' from cache (hit).",
+                    data={"tag": tag, "blob_name": blob_name, "cache_hit": True,
+                          "size": len(cached), "content": cached},
+                )
+                self._last_obs = obs
+                return StepResult(
+                    observation=obs,
+                    reward=self._rewards.cache_hit,
+                )
 
-        # Cache miss — fetch from IOWarp
+        # Cache miss or skip_cache — fetch from IOWarp
         result = self._client.context_retrieve(tag=tag, blob_name=blob_name)
 
         # Decode hex-encoded bytes if needed
@@ -205,14 +220,15 @@ class IOWarpEnvironment:
         if isinstance(data, str) and result.encoding == "hex":
             data = bytes.fromhex(data)
 
-        # Populate cache
-        if isinstance(data, (bytes, bytearray)):
+        # Populate cache (unless skipping cache)
+        if not skip_cache and isinstance(data, (bytes, bytearray)):
             self._cache.put(tag, blob_name, data)
 
+        source = "IOWarp (bypassed cache)" if skip_cache else "IOWarp (cache miss, now cached)"
         obs = Observation(
-            text=f"Retrieved '{blob_name}' from IOWarp (cache miss, now cached).",
+            text=f"Retrieved '{blob_name}' from {source}.",
             data={"tag": tag, "blob_name": blob_name, "cache_hit": False,
-                  "size": len(data) if data else 0},
+                  "size": len(data) if data else 0, "content": data},
         )
         self._last_obs = obs
         return StepResult(
